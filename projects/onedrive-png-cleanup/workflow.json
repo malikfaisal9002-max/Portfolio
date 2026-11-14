@@ -1,0 +1,159 @@
+{
+  "name": "OneDrive Bulk PNG Cleanup - Public Template",
+  "nodes": [
+    {
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "name": "List all items in target folder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "url": "=https://graph.microsoft.com/v1.0/me/drive/root:/{{ $env.ONEDRIVE_FOLDER_PATH }}:/children?$select=id,name,createdDateTime,file,deleted&$top=1000",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "microsoftOneDriveOAuth2Api",
+        "options": {
+          "pagination": {
+            "pagination": {
+              "paginationMode": "responseContainsNextURL",
+              "nextURL": "={{ $response.body[\"@odata.nextLink\"] }}",
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ !$response.body[\"@odata.nextLink\"] }}"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Split items",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "fieldToSplitOut": "value",
+        "options": {}
+      }
+    },
+    {
+      "name": "Keep PNGs created 5 Nov 2026",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.4,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ !!$json.file && !$json.deleted && String($json.name).toLowerCase().endsWith(\".png\") && $json.createdDateTime >= \"2026-11-04T19:00:00Z\" && $json.createdDateTime < \"2026-11-05T19:00:00Z\" }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "name": "Delete PNG",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "method": "DELETE",
+        "url": "=https://graph.microsoft.com/v1.0/me/drive/items/{{ $json.id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "microsoftOneDriveOAuth2Api",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 10,
+              "batchInterval": 500
+            }
+          }
+        }
+      },
+      "retryOnFail": true
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "List all items in target folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List all items in target folder": {
+      "main": [
+        [
+          {
+            "node": "Split items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split items": {
+      "main": [
+        [
+          {
+            "node": "Keep PNGs created 5 Nov 2026",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep PNGs created 5 Nov 2026": {
+      "main": [
+        [
+          {
+            "node": "Delete PNG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
